@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { ITask, ApiResponse } from '../types/task';
 
-const API_URL = 'http://localhost:5000/api/tasks';
+const API_URL = 'https://crud-2-0backend.vercel.app/api/tasks';
 
 // 1. GET ALL TASKS (Read All)
 export const fetchTasks = async (): Promise<ITask[]> => {
