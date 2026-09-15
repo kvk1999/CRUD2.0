@@ -1,0 +1,33 @@
+import axios from 'axios';
+import { ITask, ApiResponse } from '../types/task';
+
+const API_URL = 'http://localhost:5000/api/tasks';
+
+// 1. GET ALL TASKS (Read All)
+export const fetchTasks = async (): Promise<ITask[]> => {
+  const response = await axios.get<ApiResponse<ITask[]>>(API_URL);
+  return response.data.data || [];
+};
+
+// 2. VIEW TASK (Read Single)
+export const fetchTaskById = async (id: string): Promise<ITask> => {
+  const response = await axios.get<ApiResponse<ITask>>(`${API_URL}/${id}`);
+  return response.data.data!;
+};
+
+// 3. CREATE TASK
+export const createTaskAPI = async (task: { title: string; description: string; status: 'Open' | 'Completed' }): Promise<ITask> => {
+  const response = await axios.post<ApiResponse<ITask>>(API_URL, task);
+  return response.data.data!;
+};
+
+// 4. UPDATE TASK
+export const updateTaskAPI = async (id: string, task: Partial<ITask>): Promise<ITask> => {
+  const response = await axios.put<ApiResponse<ITask>>(`${API_URL}/${id}`, task);
+  return response.data.data!;
+};
+
+// 5. DELETE TASK
+export const deleteTaskAPI = async (id: string): Promise<void> => {
+  await axios.delete(`${API_URL}/${id}`);
+};
