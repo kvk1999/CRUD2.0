@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { ITask, ApiResponse } from '../types/task';
 
-const API_URL = 'https://crud2-0backend.onrender.com';
+const API_URL = 'https://crud2-0backend.onrender.com/api/tasks';
 
 // 1. GET ALL TASKS (Read All)
 export const fetchTasks = async (): Promise<ITask[]> => {
