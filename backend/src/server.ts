@@ -2,6 +2,7 @@ import express, { Request, Response } from 'express';
 import mongoose from 'mongoose';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import taskRoutes from './routes/taskRoutes.js';
 
 // Load environment variables from .env file
 dotenv.config();
@@ -13,6 +14,7 @@ const MONGO_URI = process.env.MONGO_URI || '';
 // Middleware
 app.use(cors());
 app.use(express.json());
+app.use('/api/tasks', taskRoutes);
 
 // Basic test route
 app.get('/', (req: Request, res: Response) => {
