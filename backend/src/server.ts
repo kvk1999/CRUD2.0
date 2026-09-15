@@ -2,9 +2,10 @@ import express, { Request, Response } from 'express';
 import mongoose from 'mongoose';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import taskRoutes from './routes/taskRoutes.js';
 
-// Load environment variables from .env file
+// Clean TypeScript imports (no .js extensions)
+import taskRoutes from './routes/taskRoutes';
+
 dotenv.config();
 
 const app = express();
@@ -14,14 +15,16 @@ const MONGO_URI = process.env.MONGO_URI || '';
 // Middleware
 app.use(cors());
 app.use(express.json());
+
+// Mount Routes
 app.use('/api/tasks', taskRoutes);
 
-// Basic test route
+// Test Route
 app.get('/', (req: Request, res: Response) => {
   res.send('API is running successfully!');
 });
 
-// Connect to MongoDB and start the server
+// Database & Server Startup
 mongoose
   .connect(MONGO_URI)
   .then(() => {
