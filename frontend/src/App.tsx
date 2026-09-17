@@ -1,90 +1,125 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { Modal } from './components/modal';
+import { fetchTasks, createTaskAPI, updateTaskAPI, deleteTaskAPI } from './services/api';
 import { ITask } from './types/task';
-// CSS is loaded by the bundler; the project does not provide TypeScript declarations for it.
-// @ts-ignore
 import './App.css';
-import { fetchTasks, fetchTaskById, createTaskAPI, updateTaskAPI, deleteTaskAPI } from './services/api';
 
-function App() {
+export default function App() {
+  // Data states
   const [tasks, setTasks] = useState<ITask[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Filter state
+  const [filterStatus, setFilterStatus] = useState<'All' | 'Open' | 'Completed'>('All');
+
+  // Modal states
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  
+  // Tracking states
+  const [currentTaskId, setCurrentTaskId] = useState<string | null>(null);
+  const [taskToDelete, setTaskToDelete] = useState<string | null>(null);
+
+  // Form states
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [status, setStatus] = useState<'Open' | 'Completed'>('Open');
-  
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [viewingTask, setViewingTask] = useState<ITask | null>(null); // For View Task feature
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState<boolean>(false);
+
+  // Load tasks
+  const loadTasks = async () => {
+    try {
+      setLoading(true);
+      const data = await fetchTasks();
+      setTasks(data);
+      setError(null);
+    } catch (err: any) {
+      setError('Failed to fetch tasks from server.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     loadTasks();
   }, []);
 
-  const loadTasks = async () => {
-    try {
-  const data = await fetchTasks();
-  setTasks(data);
-} catch (err) {
-  setError('Failed to fetch tasks from server.');
-} finally {
-    setLoading(false);
-}
+  // Reset form fields
+  const resetForm = () => {
+    setTitle('');
+    setDescription('');
+    setStatus('Open');
+    setCurrentTaskId(null);
   };
 
-  // 1 & 4. CREATE / UPDATE Task
-  const handleSubmit = async (e: React.FormEvent) => {
+  // Handle Create Submit
+  const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim()) {
-      setError('Title cannot be empty');
-      return;
-    }
-
     try {
-      if (editingId) {
-        const updated = await updateTaskAPI(editingId, { title, description, status });
-        setTasks(tasks.map(t => (t._id === editingId ? updated : t)));
-        setEditingId(null);
-      } else {
-        const newTask = await createTaskAPI({ title, description, status });
-        setTasks([newTask, ...tasks]);
-      }
-      setTitle('');
-      setDescription('');
-      setStatus('Open');
-      setError(null);
-    } catch (err) {
+      await createTaskAPI({ title, description, status });
+      setIsCreateOpen(false);
+      resetForm();
+      loadTasks();
+    } catch (err: any) {
       setError('Failed to save the task.');
     }
   };
 
-  const handleEdit = (task: ITask) => {
-    setEditingId(task._id);
+  // Open Edit Modal with existing task data
+  const openEditModal = (task: ITask) => {
+    setCurrentTaskId(task._id!);
     setTitle(task.title);
-    setDescription(task.description);
+    setDescription(task.description || '');
     setStatus(task.status);
-    setViewingTask(null);
+    setIsEditOpen(true);
   };
 
-  // 3. VIEW Single Task
-  const handleView = async (id: string) => {
-    try {
-      const task = await fetchTaskById(id);
-      setViewingTask(task);
-    } catch (err) {
-      setError('Failed to fetch task details.');
+  // Handle Edit Submit
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (currentTaskId) {
+      try {
+        await updateTaskAPI(currentTaskId, { title, description, status });
+        setIsEditOpen(false);
+        resetForm();
+        loadTasks();
+      } catch (err: any) {
+        setError('Failed to update the task.');
+      }
     }
   };
 
-  // 5. DELETE Task
-  const handleDelete = async (id: string) => {
-    try {
-      await deleteTaskAPI(id);
-      setTasks(tasks.filter(t => t._id !== id));
-      if (viewingTask?._id === id) setViewingTask(null);
-    } catch (err) {
-      setError('Failed to delete task.');
+  // Handle Delete Confirmation Trigger
+  const promptDelete = (id: string) => {
+    setTaskToDelete(id);
+    setIsDeleteOpen(true);
+  };
+
+  // Execute Deletion
+  const executeDelete = async () => {
+    if (taskToDelete) {
+      try {
+        await deleteTaskAPI(taskToDelete);
+        setIsDeleteOpen(false);
+        setTaskToDelete(null);
+        loadTasks();
+      } catch (err: any) {
+        setError('Failed to delete the task.');
+      }
     }
   };
+
+  // Computed statistics
+  const totalTasks = tasks.length;
+  const openTasks = tasks.filter(t => t.status === 'Open').length;
+  const completedTasks = tasks.filter(t => t.status === 'Completed').length;
+
+  // Filtered tasks logic
+  const filteredTasks = tasks.filter(task => {
+    if (filterStatus === 'All') return true;
+    return task.status === filterStatus;
+  });
 
   return (
     <div className="container">
@@ -92,68 +127,269 @@ function App() {
 
       {error && <div className="error-banner">{error}</div>}
 
-      {/* Task Form (Create / Update) */}
-      <form onSubmit={handleSubmit} className="task-form">
-        <h2>{editingId ? 'Update Task' : 'Create Task'}</h2>
-        <input 
-          type="text" 
-          placeholder="Task Title *" 
-          value={title} 
-          onChange={(e) => setTitle(e.target.value)} 
-        />
-        <textarea 
-          placeholder="Task Description" 
-          value={description} 
-          onChange={(e) => setDescription(e.target.value)} 
-        />
-        <select value={status} onChange={(e) => setStatus(e.target.value as 'Open' | 'Completed')}>
-          <option value="Open">Open</option>
-          <option value="Completed">Completed</option>
-        </select>
-        <button type="submit">{editingId ? 'Save Changes' : 'Add Task'}</button>
-        {editingId && (
-  <button type="button" className="btn-cancel" onClick={() => { setEditingId(null); setTitle(''); setDescription(''); }}>
-    Cancel
-  </button>
-)}
-      </form>
+      {/* Dashboard Stats */}
+      <div className="stats-row">
+        <div className="stat-card">
+          <span>Total Tasks</span>
+          <h3>{totalTasks}</h3>
+        </div>
+        <div className="stat-card">
+          <span>Open</span>
+          <h3>{openTasks}</h3>
+        </div>
+        <div className="stat-card">
+          <span>Completed</span>
+          <h3>{completedTasks}</h3>
+        </div>
+      </div>
 
-      {/* View Single Task Modal / Detail Box */}
-      {viewingTask && (
-        <div className="view-modal">
-          <div className="modal-content">
-            <h2>Task Details (View)</h2>
-            <p><strong>ID:</strong> {viewingTask._id}</p>
-            <p><strong>Title:</strong> {viewingTask.title}</p>
-            <p><strong>Description:</strong> {viewingTask.description || 'No description provided.'}</p>
-            <p><strong>Status:</strong> <span className={`badge ${viewingTask.status.toLowerCase()}`}>{viewingTask.status}</span></p>
-            <p><strong>Created At:</strong> {new Date(viewingTask.createdAt).toLocaleString()}</p>
-            <button onClick={() => setViewingTask(null)} className="btn-close">Close Details</button>
+      {/* Header & Create Button */}
+      <div className="app-header-row">
+        <h2 className="app-header-title">
+          Get All Tasks
+        </h2>
+        <button 
+          onClick={() => { resetForm(); setIsCreateOpen(true); }}
+          className="btn-primary-custom"
+        >
+          + Add
+        </button>
+      </div>
+
+      {/* Status Filter Buttons */}
+      <div style={{ display: 'flex', gap: '10px', marginBottom: '16px' }}>
+        <button 
+          onClick={() => setFilterStatus('All')}
+          style={{
+            padding: '6px 14px',
+            borderRadius: '20px',
+            border: '1px solid var(--border-color)',
+            background: filterStatus === 'All' ? '#4f46e5' : 'white',
+            color: filterStatus === 'All' ? 'white' : 'var(--text-main)',
+            fontWeight: 500,
+            cursor: 'pointer',
+            fontSize: '13px'
+          }}
+        >
+          All Tasks
+        </button>
+        <button 
+          onClick={() => setFilterStatus('Open')}
+          style={{
+            padding: '6px 14px',
+            borderRadius: '20px',
+            border: '1px solid var(--border-color)',
+            background: filterStatus === 'Open' ? '#f59e0b' : 'white',
+            color: filterStatus === 'Open' ? 'white' : 'var(--text-main)',
+            fontWeight: 500,
+            cursor: 'pointer',
+            fontSize: '13px'
+          }}
+        >
+          Open
+        </button>
+        <button 
+          onClick={() => setFilterStatus('Completed')}
+          style={{
+            padding: '6px 14px',
+            borderRadius: '20px',
+            border: '1px solid var(--border-color)',
+            background: filterStatus === 'Completed' ? '#10b981' : 'white',
+            color: filterStatus === 'Completed' ? 'white' : 'var(--text-main)',
+            fontWeight: 500,
+            cursor: 'pointer',
+            fontSize: '13px'
+          }}
+        >
+          Completed
+        </button>
+      </div>
+
+      {loading && <p style={{ textAlign: 'center' }}>Loading tasks...</p>}
+
+      {/* Task Table View */}
+      <div className="task-table-container">
+        <table className="task-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Title</th>
+              <th>Description</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {!loading && filteredTasks.length === 0 ? (
+              <tr>
+                <td colSpan={5} style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)' }}>
+                  No {filterStatus.toLowerCase()} tasks found.
+                </td>
+              </tr>
+            ) : (
+              filteredTasks.map((task) => (
+                <tr key={task._id}>
+                  <td style={{ fontWeight: 600, color: 'var(--text-muted)' }}>
+                    #{String(task._id).slice(-6)}
+                  </td>
+                  <td style={{ fontWeight: 600, color: '#402a09' }}>
+                    {task.title}
+                  </td>
+                  <td style={{ color: 'var(--text-muted)', maxWidth: '250px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {task.description || '—'}
+                  </td>
+                  <td>
+                    <span className={`badge ${task.status === 'Completed' ? 'completed' : 'open'}`}>
+                      {task.status}
+                    </span>
+                  </td>
+                  <td>
+                    <div className="table-actions">
+                      <button 
+                        onClick={() => openEditModal(task)}
+                        className="btn-icon-edit"
+                      >
+                        Edit
+                      </button>
+                      <button 
+                        onClick={() => promptDelete(task._id!)}
+                        className="btn-icon-delete"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* --- CREATE TASK MODAL --- */}
+      <Modal isOpen={isCreateOpen} onClose={() => setIsCreateOpen(false)} title="Create Task">
+        <form onSubmit={handleCreateSubmit} className="task-form-clean">
+          <div className="form-group">
+            <label>Task Title *</label>
+            <input 
+              type="text" 
+              required
+              value={title} 
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Enter task title"
+            />
+          </div>
+          <div className="form-group">
+            <label>Task Description</label>
+            <textarea 
+              value={description} 
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Enter task description"
+              rows={3}
+            />
+          </div>
+          <div className="form-group">
+            <label>Status</label>
+            <select 
+              value={status} 
+              onChange={(e) => setStatus(e.target.value as 'Open' | 'Completed')}
+            >
+              <option value="Open">Open</option>
+              <option value="Completed">Completed</option>
+            </select>
+          </div>
+          <div className="form-actions">
+            <button 
+              type="button" 
+              onClick={() => setIsCreateOpen(false)}
+              className="btn-cancel-custom"
+            >
+              Cancel
+            </button>
+            <button 
+              type="submit" 
+              className="btn-primary-custom"
+            >
+              Add Task
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* --- EDIT TASK MODAL --- */}
+      <Modal isOpen={isEditOpen} onClose={() => setIsEditOpen(false)} title="Edit Task">
+        <form onSubmit={handleEditSubmit} className="task-form-clean">
+          <div className="form-group">
+            <label>Task Title *</label>
+            <input 
+              type="text" 
+              required
+              value={title} 
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Enter task title"
+            />
+          </div>
+          <div className="form-group">
+            <label>Task Description</label>
+            <textarea 
+              value={description} 
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Enter task description"
+              rows={3}
+            />
+          </div>
+          <div className="form-group">
+            <label>Status</label>
+            <select 
+              value={status} 
+              onChange={(e) => setStatus(e.target.value as 'Open' | 'Completed')}
+            >
+              <option value="Open">Open</option>
+              <option value="Completed">Completed</option>
+            </select>
+          </div>
+          <div className="form-actions">
+            <button 
+              type="button" 
+              onClick={() => setIsEditOpen(false)}
+              className="btn-cancel-custom"
+            >
+              Cancel
+            </button>
+            <button 
+              type="submit" 
+              className="btn-primary-custom"
+            >
+              Save Changes
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* --- DELETE CONFIRMATION MODAL --- */}
+      <Modal isOpen={isDeleteOpen} onClose={() => setIsDeleteOpen(false)} title="Confirm Deletion">
+        <div style={{ padding: '10px 0' }}>
+          <p style={{ fontSize: '15px', color: 'var(--text-main)', marginBottom: '24px' }}>
+            Are you sure you want to delete this task?
+          </p>
+          <div className="form-actions">
+            <button 
+              onClick={() => setIsDeleteOpen(false)}
+              className="btn-cancel"
+              style={{ flex: 1 }}
+            >
+              Cancel
+            </button>
+            <button 
+              onClick={executeDelete}
+              className="btn-delete"
+              style={{ flex: 1, background: 'var(--danger)', color: 'white', border: 'none', fontWeight: 600, padding: '10px 18px', borderRadius: '8px', cursor: 'pointer' }}
+            >
+              Yes, Delete
+            </button>
           </div>
         </div>
-      )}
-
-      {/* Task List (Get All Tasks) */}
-      <div className="task-list">
-        <h2>Get All Tasks</h2>
-        {loading ? <p>Loading tasks...</p> : tasks.length === 0 ? <p>No tasks found.</p> : null}
-        
-        {tasks.map((task) => (
-          <div key={task._id} className={`task-card ${task.status.toLowerCase()}`}>
-            <div className="task-info">
-              <h3>{task.title}</h3>
-              <span className={`badge ${task.status.toLowerCase()}`}>{task.status}</span>
-            </div>
-            <div className="task-actions">
-              <button onClick={() => handleView(task._id)} className="btn-view">View</button>
-              <button onClick={() => handleEdit(task)} className="btn-edit">Update</button>
-              <button onClick={() => handleDelete(task._id)} className="btn-delete">Delete</button>
-            </div>
-          </div>
-        ))}
-      </div>
+      </Modal>
     </div>
   );
 }
-
-export default App;

@@ -22,9 +22,9 @@ export const createTaskAPI = async (task: { title: string; description: string; 
 };
 
 // 4. UPDATE TASK
-export const updateTaskAPI = async (id: string, task: Partial<ITask>): Promise<ITask> => {
-  const response = await axios.put<ApiResponse<ITask>>(`${API_URL}/${id}`, task);
-  return response.data.data!;
+export const updateTaskAPI = async (id: string, updatedData: { title: string; description: string; status: 'Open' | 'Completed' }) => {
+  const response = await axios.put(`${API_URL}/${id}`, updatedData);
+  return response.data;
 };
 
 // 5. DELETE TASK
