@@ -5,6 +5,7 @@ import dotenv from 'dotenv';
 
 // Clean TypeScript imports (no .js extensions)
 import taskRoutes from './routes/taskRoutes';
+import authRoutes from './routes/authRoutes';
 
 dotenv.config();
 
@@ -18,6 +19,7 @@ app.use(express.json());
 
 // Mount Routes
 app.use('/api/tasks', taskRoutes);
+app.use('/api/auth', authRoutes);
 
 // Test Route
 app.get('/', (req: Request, res: Response) => {

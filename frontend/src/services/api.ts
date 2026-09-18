@@ -2,6 +2,22 @@ import axios from 'axios';
 import { ITask, ApiResponse } from '../types/task';
 
 const API_URL = 'https://crud2-0backend.onrender.com/api/tasks';
+const AUTH_API_URL = 'https://crud2-0backend.onrender.com/api/auth';
+
+interface AuthUser {
+  username: string;
+  email: string;
+}
+
+export const registerUser = async (user: { username: string; email: string; password: string }): Promise<AuthUser> => {
+  const response = await axios.post<ApiResponse<AuthUser>>(`${AUTH_API_URL}/register`, user);
+  return response.data.data!;
+};
+
+export const loginUser = async (credentials: { identifier: string; password: string }): Promise<AuthUser> => {
+  const response = await axios.post<ApiResponse<AuthUser>>(`${AUTH_API_URL}/login`, credentials);
+  return response.data.data!;
+};
 
 // 1. GET ALL TASKS (Read All)
 export const fetchTasks = async (): Promise<ITask[]> => {

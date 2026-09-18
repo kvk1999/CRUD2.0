@@ -1,13 +1,35 @@
 import React, { useState, useEffect } from 'react';
 import { Modal } from './components/modal';
-import { fetchTasks, createTaskAPI, updateTaskAPI, deleteTaskAPI } from './services/api';
 import { ITask } from './types/task';
+import { loginUser, registerUser } from './services/api';
 import './App.css';
 
+const SESSION_KEY = 'task-manager-session';
+const tasksKey = (username: string) => `task-manager-tasks-${username.toLowerCase()}`;
+
+const readUserTasks = (username: string): ITask[] => {
+  try {
+    return JSON.parse(localStorage.getItem(tasksKey(username)) || '[]') as ITask[];
+  } catch {
+    return [];
+  }
+};
+
+const createTaskId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
 export default function App() {
+  // Mock authentication state. The session survives refreshes, while tasks stay scoped to a username.
+  const [currentUser, setCurrentUser] = useState<string | null>(() => localStorage.getItem(SESSION_KEY));
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+  const [authIdentifier, setAuthIdentifier] = useState('');
+  const [authUsername, setAuthUsername] = useState('');
+  const [authEmail, setAuthEmail] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [authError, setAuthError] = useState<string | null>(null);
+
   // Data states
   const [tasks, setTasks] = useState<ITask[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Filter state
@@ -28,22 +50,64 @@ export default function App() {
   const [status, setStatus] = useState<'Open' | 'Completed'>('Open');
 
   // Load tasks
-  const loadTasks = async () => {
-    try {
-      setLoading(true);
-      const data = await fetchTasks();
-      setTasks(data);
-      setError(null);
-    } catch (err: any) {
-      setError('Failed to fetch tasks from server.');
-    } finally {
-      setLoading(false);
-    }
+  const loadTasks = (username: string) => {
+    setLoading(true);
+    setTasks(readUserTasks(username));
+    setError(null);
+    setLoading(false);
   };
 
   useEffect(() => {
-    loadTasks();
-  }, []);
+    if (currentUser) {
+      loadTasks(currentUser);
+    } else {
+      setTasks([]);
+      setLoading(false);
+    }
+  }, [currentUser]);
+
+  const persistTasks = (nextTasks: ITask[]) => {
+    if (!currentUser) return;
+    localStorage.setItem(tasksKey(currentUser), JSON.stringify(nextTasks));
+    setTasks(nextTasks);
+  };
+
+  const handleAuthSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const identifier = authMode === 'login' ? authIdentifier.trim() : authUsername.trim();
+    const username = authMode === 'login' ? '' : identifier;
+    const email = authEmail.trim().toLowerCase();
+    const password = authPassword.trim();
+
+    if (!identifier || password.length < 4 || (authMode === 'register' && (username.length < 3 || !/^\S+@\S+\.\S+$/.test(email)))) {
+      setAuthError(authMode === 'login'
+        ? 'Enter your username or email and a password with 4+ characters.'
+        : 'Enter a valid email, a username with 3+ characters, and a password with 4+ characters.');
+      return;
+    }
+
+    try {
+      const user = authMode === 'register'
+        ? await registerUser({ username, email, password })
+        : await loginUser({ identifier, password });
+      localStorage.setItem(SESSION_KEY, user.username);
+      setCurrentUser(user.username);
+      setAuthIdentifier('');
+      setAuthUsername('');
+      setAuthEmail('');
+      setAuthPassword('');
+      setAuthError(null);
+    } catch (error: any) {
+      setAuthError(error.response?.data?.message || 'Unable to connect to the authentication server.');
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem(SESSION_KEY);
+    setCurrentUser(null);
+    setFilterStatus('All');
+    setError(null);
+  };
 
   // Reset form fields
   const resetForm = () => {
@@ -57,11 +121,17 @@ export default function App() {
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await createTaskAPI({ title, description, status });
+      const newTask: ITask = {
+        _id: createTaskId(),
+        title: title.trim(),
+        description: description.trim(),
+        status,
+        createdAt: new Date().toISOString()
+      };
+      persistTasks([newTask, ...tasks]);
       setIsCreateOpen(false);
       resetForm();
-      loadTasks();
-    } catch (err: any) {
+    } catch {
       setError('Failed to save the task.');
     }
   };
@@ -80,11 +150,12 @@ export default function App() {
     e.preventDefault();
     if (currentTaskId) {
       try {
-        await updateTaskAPI(currentTaskId, { title, description, status });
+        persistTasks(tasks.map(task => task._id === currentTaskId
+          ? { ...task, title: title.trim(), description: description.trim(), status }
+          : task));
         setIsEditOpen(false);
         resetForm();
-        loadTasks();
-      } catch (err: any) {
+      } catch {
         setError('Failed to update the task.');
       }
     }
@@ -100,11 +171,10 @@ export default function App() {
   const executeDelete = async () => {
     if (taskToDelete) {
       try {
-        await deleteTaskAPI(taskToDelete);
+        persistTasks(tasks.filter(task => task._id !== taskToDelete));
         setIsDeleteOpen(false);
         setTaskToDelete(null);
-        loadTasks();
-      } catch (err: any) {
+      } catch {
         setError('Failed to delete the task.');
       }
     }
@@ -121,9 +191,67 @@ export default function App() {
     return task.status === filterStatus;
   });
 
+  if (!currentUser) {
+    return (
+      <div className="auth-shell">
+        <div className="auth-panel">
+          <p className="eyebrow">Task Management System</p>
+          <h1>{authMode === 'login' ? 'Welcome back' : 'Create your workspace'}</h1>
+          <p className="auth-intro">
+            {authMode === 'login'
+              ? 'Log in to open your private task dashboard.'
+              : 'Register a unique account to keep your tasks separate.'}
+          </p>
+          {authError && <div className="error-banner">{authError}</div>}
+          <form onSubmit={handleAuthSubmit} className="auth-form">
+            <div className="form-group">
+              <label htmlFor={authMode === 'login' ? 'identifier' : 'username'}>
+                {authMode === 'login' ? 'Username or Email ID' : 'Username'}
+              </label>
+              <input
+                id={authMode === 'login' ? 'identifier' : 'username'}
+                type="text"
+                value={authMode === 'login' ? authIdentifier : authUsername}
+                onChange={e => authMode === 'login' ? setAuthIdentifier(e.target.value) : setAuthUsername(e.target.value)}
+                required
+                autoComplete="username"
+                placeholder={authMode === 'login' ? 'username or you@example.com' : undefined}
+              />
+            </div>
+            {authMode === 'register' && (
+              <div className="form-group">
+                <label htmlFor="email">Email ID</label>
+                <input id="email" type="email" value={authEmail} onChange={e => setAuthEmail(e.target.value)} required autoComplete="email" placeholder="you@example.com" />
+              </div>
+            )}
+            <div className="form-group">
+              <label htmlFor="password">Password</label>
+              <input id="password" type="password" value={authPassword} onChange={e => setAuthPassword(e.target.value)} required autoComplete={authMode === 'login' ? 'current-password' : 'new-password'} />
+            </div>
+            <button type="submit" className="btn-primary-custom auth-submit">
+              {authMode === 'login' ? 'Log in' : 'Register'}
+            </button>
+          </form>
+          <button className="auth-switch" onClick={() => { setAuthMode(authMode === 'login' ? 'register' : 'login'); setAuthError(null); }}>
+            {authMode === 'login' ? 'New here? Create an account' : 'Already registered? Log in'}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="container">
-      <h1>Task Management System</h1>
+      <div className="topbar">
+        <div>
+          <p className="eyebrow">Private workspace</p>
+          <h1>Task Management System</h1>
+        </div>
+        <div className="session-controls">
+          <span className="user-indicator">Signed in as <strong>{currentUser}</strong></span>
+          <button className="btn-logout" onClick={handleLogout}>Log out</button>
+        </div>
+      </div>
 
       {error && <div className="error-banner">{error}</div>}
 
