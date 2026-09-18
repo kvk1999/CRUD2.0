@@ -1,24 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Modal } from './components/modal';
 import { ITask } from './types/task';
-import { loginUser, registerUser } from './services/api';
+import { createTaskAPI, deleteTaskAPI, fetchTasks, loginUser, registerUser, updateTaskAPI } from './services/api';
 import './App.css';
 
 const SESSION_KEY = 'task-manager-session';
-const tasksKey = (username: string) => `task-manager-tasks-${username.toLowerCase()}`;
-
-const readUserTasks = (username: string): ITask[] => {
-  try {
-    return JSON.parse(localStorage.getItem(tasksKey(username)) || '[]') as ITask[];
-  } catch {
-    return [];
-  }
-};
-
-const createTaskId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
 export default function App() {
-  // Mock authentication state. The session survives refreshes, while tasks stay scoped to a username.
+  // The session survives refreshes, while task ownership is enforced by the backend.
   const [currentUser, setCurrentUser] = useState<string | null>(() => localStorage.getItem(SESSION_KEY));
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [authIdentifier, setAuthIdentifier] = useState('');
@@ -50,11 +39,16 @@ export default function App() {
   const [status, setStatus] = useState<'Open' | 'Completed'>('Open');
 
   // Load tasks
-  const loadTasks = (username: string) => {
+  const loadTasks = async (username: string) => {
     setLoading(true);
-    setTasks(readUserTasks(username));
-    setError(null);
-    setLoading(false);
+    try {
+      setTasks(await fetchTasks(username));
+      setError(null);
+    } catch {
+      setError('Failed to fetch tasks from server.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -65,12 +59,6 @@ export default function App() {
       setLoading(false);
     }
   }, [currentUser]);
-
-  const persistTasks = (nextTasks: ITask[]) => {
-    if (!currentUser) return;
-    localStorage.setItem(tasksKey(currentUser), JSON.stringify(nextTasks));
-    setTasks(nextTasks);
-  };
 
   const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -121,16 +109,11 @@ export default function App() {
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const newTask: ITask = {
-        _id: createTaskId(),
-        title: title.trim(),
-        description: description.trim(),
-        status,
-        createdAt: new Date().toISOString()
-      };
-      persistTasks([newTask, ...tasks]);
+      if (!currentUser) return;
+      await createTaskAPI({ title: title.trim(), description: description.trim(), status }, currentUser);
       setIsCreateOpen(false);
       resetForm();
+      await loadTasks(currentUser);
     } catch {
       setError('Failed to save the task.');
     }
@@ -150,11 +133,11 @@ export default function App() {
     e.preventDefault();
     if (currentTaskId) {
       try {
-        persistTasks(tasks.map(task => task._id === currentTaskId
-          ? { ...task, title: title.trim(), description: description.trim(), status }
-          : task));
+        if (!currentUser) return;
+        await updateTaskAPI(currentTaskId, { title: title.trim(), description: description.trim(), status }, currentUser);
         setIsEditOpen(false);
         resetForm();
+        await loadTasks(currentUser);
       } catch {
         setError('Failed to update the task.');
       }
@@ -171,9 +154,11 @@ export default function App() {
   const executeDelete = async () => {
     if (taskToDelete) {
       try {
-        persistTasks(tasks.filter(task => task._id !== taskToDelete));
+        if (!currentUser) return;
+        await deleteTaskAPI(taskToDelete, currentUser);
         setIsDeleteOpen(false);
         setTaskToDelete(null);
+        await loadTasks(currentUser);
       } catch {
         setError('Failed to delete the task.');
       }
