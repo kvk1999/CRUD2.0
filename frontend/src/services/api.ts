@@ -1,14 +1,11 @@
 import axios from 'axios';
-import { ITask, ApiResponse } from '../types/task';
+import { ApiResponse, CreateTaskPayload, ITask, IUser, UpdateTaskPayload } from '../types/task';
 
 const API_BASE_URL = 'https://crud2-0backend.onrender.com/api';
 const API_URL = `${API_BASE_URL}/tasks`;
 const AUTH_API_URL = `${API_BASE_URL}/auth`;
 
-interface AuthUser {
-  username: string;
-  email: string;
-}
+type AuthUser = Pick<IUser, 'username' | 'email'>;
 
 export const registerUser = async (user: { username: string; email: string; password: string }): Promise<AuthUser> => {
   const response = await axios.post<ApiResponse<AuthUser>>(`${AUTH_API_URL}/register`, user);
@@ -33,13 +30,13 @@ export const fetchTaskById = async (id: string, username: string): Promise<ITask
 };
 
 // 3. CREATE TASK
-export const createTaskAPI = async (task: { title: string; description: string; status: 'Open' | 'Completed' }, username: string): Promise<ITask> => {
+export const createTaskAPI = async (task: CreateTaskPayload, username: string): Promise<ITask> => {
   const response = await axios.post<ApiResponse<ITask>>(API_URL, task, { headers: { 'x-user': username } });
   return response.data.data!;
 };
 
 // 4. UPDATE TASK
-export const updateTaskAPI = async (id: string, updatedData: { title: string; description: string; status: 'Open' | 'Completed' }, username: string) => {
+export const updateTaskAPI = async (id: string, updatedData: UpdateTaskPayload, username: string) => {
   const response = await axios.put(`${API_URL}/${id}`, updatedData, { headers: { 'x-user': username } });
   return response.data;
 };

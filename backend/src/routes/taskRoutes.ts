@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { Task } from '../models/Task';
+import { CreateTaskDTO, Task, UpdateTaskDTO } from '../models/Task';
 
 const router = Router();
 
@@ -44,7 +44,7 @@ router.post('/', async (req: Request, res: Response) => {
   try {
     const username = getUsername(req, res);
     if (!username) return;
-    const { title, description, status } = req.body;
+    const { title, description, status }: CreateTaskDTO = req.body;
     const newTask = await Task.create({ username, title, description, status });
     res.status(201).json({ success: true, data: newTask });
   } catch (error: any) {
@@ -57,9 +57,10 @@ router.put('/:id', async (req: Request, res: Response) => {
   try {
     const username = getUsername(req, res);
     if (!username) return;
+    const { title, description, status }: UpdateTaskDTO = req.body;
     const updatedTask = await Task.findByIdAndUpdate(
       { _id: req.params.id, username },
-      req.body,
+      { title, description, status },
       { new: true, runValidators: true }
     );
     if (!updatedTask) {

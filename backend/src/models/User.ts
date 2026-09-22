@@ -1,11 +1,16 @@
 import { Schema, model, Document } from 'mongoose';
 
-export interface IUser extends Document {
+export type Role = 'admin' | 'user' | 'guest';
+
+export interface UserFields {
   username: string;
   email: string;
   passwordHash: string;
   createdAt: Date;
 }
+
+export type IUser = UserFields & Document;
+export type AuthenticatedUser = IUser & { role: Role };
 
 const UserSchema = new Schema<IUser>({
   username: { type: String, required: true, unique: true, trim: true },
