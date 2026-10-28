@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
 import { Task } from '../models/Task';
 
-// CREATE
+// CREATE TASK
 const createTask = async (req: Request, res: Response): Promise<void> => {
   try {
     const { title, description, status } = req.body;
@@ -18,7 +18,7 @@ const createTask = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
-// GET ALL
+// GET ALL TASKS
 const getTasks = async (_req: Request, res: Response): Promise<void> => {
   try {
     const tasks = await Task.find().sort({ createdAt: -1 });
@@ -28,7 +28,7 @@ const getTasks = async (_req: Request, res: Response): Promise<void> => {
   }
 };
 
-// GET SINGLE (View Task)
+// GET SINGLE TASK (View Task)
 const getTaskById = async (req: Request, res: Response): Promise<void> => {
   try {
     const task = await Task.findById(req.params.id);
@@ -42,7 +42,7 @@ const getTaskById = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
-// UPDATE
+// UPDATE TASK
 const updateTask = async (req: Request, res: Response): Promise<void> => {
   try {
     const { title, description, status } = req.body;
@@ -62,7 +62,7 @@ const updateTask = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
-// DELETE
+// DELETE TASK
 const deleteTask = async (req: Request, res: Response): Promise<void> => {
   try {
     const deletedTask = await Task.findByIdAndDelete(req.params.id);
